@@ -33,7 +33,14 @@ func Download(filename string, url string) bool {
 	return true
 }
 
-func PushDB() {
+type Record struct {
+	chapter int
+	period int
+	line int
+	text string
+}
+
+func PushDB(table string, list []Record) {
 	//64bit windowsで使うにはgccが必要です。
 	//http://twinbird-htn.hatenablog.com/entry/2016/07/01/133824
 	var dbFile string = "./test.db"
@@ -44,32 +51,40 @@ func PushDB() {
 	if err != nil { panic(err) }
 	defer db.Close()
 
-	_, err = db.Exec( `CREATE TABLE "ja" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "chapter" INTEGER, "period" INTEGER, "line" INTEGER, "text" VARCHAR(2000))` )
+	_, err = db.Exec( `CREATE TABLE "` + table + `" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "chapter" INTEGER, "period" INTEGER, "line" INTEGER, "text" VARCHAR(2000))` )
 	if err != nil { panic(err) }
 
+	tx, err := db.Begin()
+	if err != nil { panic(err) }
+	stmt, err := tx.Prepare(`INSERT INTO "` + table + `" ("chapter", "period", "line", "text") VALUES (?, ?, ?, ?) `)
+	//stmt, err := db.Prepare( `INSERT INTO "ja" ("chapter", "period", "line", "text") VALUES (?, ?, ?, ?) ` )
+	if err != nil { panic(err) }
+	defer stmt.Close()
+
+	for i := range list {
+		if _, err = stmt.Exec(list[i].chapter, list[i].period, list[i].line, list[i].text); err != nil { panic(err) }
+	}
+	tx.Commit()
+}
+
+func GetEnRecords() []Record{
 	fp, err := os.Open("alice_en.txt")
 	if err != nil {
 		panic(err)
 	}
-	tx, err := db.Begin()
-	if err != nil { panic(err) }
-	stmt, err := tx.Prepare(`INSERT INTO "ja" ("chapter", "period", "line", "text") VALUES (?, ?, ?, ?) `)
-	//stmt, err := db.Prepare( `INSERT INTO "ja" ("chapter", "period", "line", "text") VALUES (?, ?, ?, ?) ` )
-	if err != nil { panic(err) }
-	defer stmt.Close()
 	scanner := bufio.NewScanner(fp)
 	defer fp.Close()
-
+	list := []Record{}
 	//一行ずつ読み取って処理する
+	l := 1
 	for scanner.Scan() {
-		if _, err = stmt.Exec(1, 1, 1, scanner.Text()); err != nil { panic(err) }
+		list = append(list, Record{chapter:1, period:1, line:l, text:scanner.Text()})
+		l++
 	}
 	if err := scanner.Err(); err != nil {
-		tx.Rollback()
 		panic(err)
 	}
-	if err != nil { panic(err) }
-	tx.Commit()
+	return list
 }
 
 func main() {
@@ -88,5 +103,5 @@ func main() {
 			return
 		}
 	}
-	PushDB()
+	PushDB("en", GetEnRecords())
 }
