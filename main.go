@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
 	"bufio"
+	"regexp"
 )
 
 //ファイル存在チェック
@@ -67,6 +68,28 @@ func PushDB(table string, list []Record) {
 	tx.Commit()
 }
 
+func GetChapter(c string) int {
+	chMap := map[string]int{
+		"I": 1,
+		"II": 2,
+		"III": 3,
+		"IV": 4,
+		"V": 5,
+		"VI": 6,
+		"VII": 7,
+		"VIII": 8,
+		"IX": 9,
+		"X": 10,
+		"XI": 11,
+		"XII": 12,
+	}
+	if val, ok := chMap[c]; ok {
+		return val
+	}
+	fmt.Println(c)
+	return 999
+}
+
 func GetEnRecords() []Record{
 	fp, err := os.Open("alice_en.txt")
 	if err != nil {
@@ -76,9 +99,35 @@ func GetEnRecords() []Record{
 	defer fp.Close()
 	list := []Record{}
 	//一行ずつ読み取って処理する
+	c := 0
+	p := 1
 	l := 1
+	isSkipping := false
 	for scanner.Scan() {
-		list = append(list, Record{chapter:1, period:1, line:l, text:scanner.Text()})
+		line := scanner.Text()
+		r := regexp.MustCompile(`CHAPTER (.+?). (.+)`)
+		if r.MatchString(line) {
+			ss := r.FindStringSubmatch(line)
+			c = GetChapter(ss[1])
+			p = 1
+			l = 1
+		} else if c == 0 {
+			//章立ての前はすべて飛ばす
+			continue
+		} else if regexp.MustCompile(`^[ \*]*$`).MatchString(line) {
+			//複数行空白があっても段落は1つのみ加算
+			if !isSkipping {
+				p++
+				l = 1
+			}
+			isSkipping = true
+			continue
+		} else if regexp.MustCompile(`^ *THE +END *$`).MatchString(line) {
+			//THE END
+			break
+		}
+		isSkipping = false
+		list = append(list, Record{chapter:c, period:p, line:l, text:line})
 		l++
 	}
 	if err := scanner.Err(); err != nil {
