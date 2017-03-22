@@ -11,6 +11,10 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/transform"
+	"strconv"
+	"bytes"
 )
 
 //ファイル存在チェック
@@ -43,9 +47,17 @@ type Record struct {
 	text    string
 }
 
-const dbFile = "./test.db"
+const dbFile = "./alice.db"
+const ita = 1
+const eng = 2
+const jap = 3
+var langMap = map[int]string{
+	ita: "伊",
+	eng: "英",
+	jap: "日",
+}
 
-func PushDB(table string, list []Record) {
+func CreateDB() {
 	//64bit windowsで使うにはgccが必要です。
 	//http://twinbird-htn.hatenablog.com/entry/2016/07/01/133824
 	db, err := sql.Open("sqlite3", dbFile)
@@ -54,23 +66,33 @@ func PushDB(table string, list []Record) {
 	}
 	defer db.Close()
 
-	_, err = db.Exec(`CREATE TABLE "` + table + `" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "lang" CHAR(2), "chapter" INTEGER, "period" INTEGER, "line" INTEGER, "text" VARCHAR(2000))`)
+	_, err = db.Exec(`CREATE TABLE "main" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "lang" INTEGER, "chapter" INTEGER, "period" INTEGER, "line" INTEGER, "text" VARCHAR)`)
 	if err != nil {
 		panic(err)
 	}
+}
+
+func PushDB(lang int, list []Record) {
+	//64bit windowsで使うにはgccが必要です。
+	//http://twinbird-htn.hatenablog.com/entry/2016/07/01/133824
+	db, err := sql.Open("sqlite3", dbFile)
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
 		panic(err)
 	}
-	stmt, err := tx.Prepare(`INSERT INTO "` + table + `" ("lang", "chapter", "period", "line", "text") VALUES (?, ?, ?, ?, ?) `)
+	stmt, err := tx.Prepare(`INSERT INTO "main" ("lang", "chapter", "period", "line", "text") VALUES (?, ?, ?, ?, ?) `)
 	if err != nil {
 		panic(err)
 	}
 	defer stmt.Close()
 
 	for i := range list {
-		if _, err = stmt.Exec(table, list[i].chapter, list[i].period, list[i].line, list[i].text); err != nil {
+		if _, err = stmt.Exec(lang, list[i].chapter, list[i].period, list[i].line, list[i].text); err != nil {
 			panic(err)
 		}
 	}
@@ -109,7 +131,7 @@ func GetChapter(c string) int {
 	return 999
 }
 
-func GetEnRecords() []Record {
+func GetEngRecords() []Record {
 	fp, err := os.Open("alice_en.txt")
 	if err != nil {
 		panic(err)
@@ -155,7 +177,7 @@ func GetEnRecords() []Record {
 	return list
 }
 
-func GetItRecords() []Record {
+func GetItaRecords() []Record {
 	fp, err := os.Open("alice_it.txt")
 	if err != nil {
 		panic(err)
@@ -207,6 +229,52 @@ func GetItRecords() []Record {
 	return list
 }
 
+func GetJapRecords() []Record {
+	fp, err := os.Open("alice_ja.txt")
+	if err != nil {
+		panic(err)
+	}
+	scanner := bufio.NewScanner(transform.NewReader(fp, japanese.ShiftJIS.NewDecoder()))
+	defer fp.Close()
+	list := []Record{}
+	//一行ずつ読み取って処理する
+	c := 0
+	p := 1
+	l := 1
+	isSkipping := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		r := regexp.MustCompile(`^(\d+?)\. `)
+		if r.MatchString(line) {
+			ss := r.FindStringSubmatch(line)
+			c, _ = strconv.Atoi(ss[1])
+			p = 1
+			l = 1
+		} else if c == 0 {
+			//章立ての前はすべて飛ばす
+			continue
+		} else if regexp.MustCompile(`^[ \*\-　]*$`).MatchString(line) {
+			//複数行空白があっても段落は1つのみ加算
+			if !isSkipping {
+				p++
+				l = 1
+			}
+			isSkipping = true
+			continue
+		} else if regexp.MustCompile(`訳したやつのいろんな言い訳`).MatchString(line) {
+			//めでたしめでたし
+			break
+		}
+		isSkipping = false
+		list = append(list, Record{chapter: c, period: p, line: l, text: line})
+		l++
+	}
+	if err := scanner.Err(); err != nil {
+		panic(err)
+	}
+	return list
+}
+
 func GetFiles() {
 	//ファイルのダウンロード
 	files := map[string]string{
@@ -224,8 +292,10 @@ func GetFiles() {
 		}
 	}
 	os.Remove(dbFile)
-	PushDB("en", GetEnRecords())
-	PushDB("it", GetItRecords())
+	CreateDB()
+	PushDB(eng, GetEngRecords())
+	PushDB(ita, GetItaRecords())
+	PushDB(jap, GetJapRecords())
 }
 
 func main() {
@@ -238,28 +308,41 @@ func main() {
 	}
 }
 func Tweet(index int) {
-	fmt.Println(index)
-	dbFile := "./test.db"
-
 	db, err := sql.Open("sqlite3", dbFile)
 	if err != nil {
 		panic(err)
 	}
 	defer db.Close()
 
-	rows, err := db.Query("select text from (select * from en where chapter = 1 union all select * from it where chapter = 1 order by chapter, period, line, lang)")
+	fmt.Println(GetPeriod(db, 1, 1, 1))
+	fmt.Println(GetPeriod(db, 2, 1, 1))
+	fmt.Println(GetPeriod(db, 3, 1, 1))
+	//38文字くらいで分割して表示
+	//1章1節(99/99) -11文字+改行3+伊英日6 バッファは20
+	//伊：CAPITOLO I. GIÙ NELLA CONIGLIERA. -33文字
+	//英：CHAPTER I. Down the Rabbit-Hole
+	//日：1. うさぎの穴をまっさかさま       -15文字
+}
+
+func GetPeriod(db *sql.DB, lang, chapter, period int) string {
+	q := `select text from (select * from main where lang = ? and chapter = ? and period = ? order by line)`
+	rows, err := db.Query(q, lang, chapter, period)
 	if err != nil {
 		panic(err)
 	}
 	defer rows.Close()
-	//todo この腐ったコードを何とかしろ！
-	for i := 0; i < index; i++ {
-		rows.Next()
-	}
+	var sb bytes.Buffer
 	var text string
-	err = rows.Scan(&text)
-	if err != nil {
-		panic(err)
+	for rows.Next() {
+		err = rows.Scan(&text)
+		if err != nil {
+			panic(err)
+		}
+		if lang == jap {
+			sb.WriteString(strings.TrimSpace(strings.Trim(text, "　")))
+		} else {
+			sb.WriteString(" " + strings.TrimSpace(text))
+		}
 	}
-	fmt.Println(text)
+	return strings.TrimSpace(sb.String())
 }
