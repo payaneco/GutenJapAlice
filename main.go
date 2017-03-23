@@ -2,19 +2,23 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/transform"
 	"io"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"regexp"
-	"strings"
-	"golang.org/x/text/encoding/japanese"
-	"golang.org/x/text/transform"
 	"strconv"
-	"bytes"
+	"strings"
+	"gopkg.in/kyokomi/emoji.v1"
 )
 
 //ファイル存在チェック
@@ -47,10 +51,17 @@ type Record struct {
 	text    string
 }
 
+//todo 質問
+type Bookmark struct {
+	Chapter int `json:"chapter"`
+	Period  int `json:"period"`
+}
+
 const dbFile = "./alice.db"
 const ita = 1
 const eng = 2
 const jap = 3
+
 var langMap = map[int]string{
 	ita: "伊",
 	eng: "英",
@@ -299,25 +310,89 @@ func GetFiles() {
 }
 
 func main() {
-	index := flag.Int("i", 0, "インデックスを設定")
+	filename := flag.String("b", "", "bookmark.jsonのパス")
 	flag.Parse()
-	if *index == 0 {
+	if *filename == "" {
 		GetFiles()
 	} else {
-		Tweet(*index)
+		chapter, period := GetBookmark(*filename)
+		Tweet(chapter, period)
+		nc, np := GetNextBookmark(chapter, period)
+		s := fmt.Sprintf(`{"chapter":%v,"period":%v}`, nc, np)
+		ioutil.WriteFile(*filename, []byte(s), 0666)
 	}
 }
-func Tweet(index int) {
+
+func QueryFirstInt(db *sql.DB, query string, args int) int {
+	rows, err := db.Query(query, args)
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	rows.Next()
+	var val int
+	err = rows.Scan(&val)
+	if err != nil {
+		panic(err)
+	}
+	return val
+}
+
+func GetNextBookmark(chapter, period int) (int, int) {
+	db, err := sql.Open("sqlite3", dbFile)
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+	qPeriod := `select ifnull(max(period), 0) from main where chapter = ?`
+	mPeriod := QueryFirstInt(db, qPeriod, chapter)
+	if mPeriod > period {
+		return chapter, period + 1
+	}
+	qChapter := `select max(chapter) from main`
+	mChapter := QueryFirstInt(db, qChapter, 0)
+	if mChapter > chapter {
+		return chapter + 1, 1
+	}
+	return 1, 1
+
+}
+
+func GetBookmark(filename string) (int, int) {
+	bytes, err := ioutil.ReadFile(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// JSONデコード
+	var b Bookmark
+	if err := json.Unmarshal(bytes, &b); err != nil {
+		log.Fatal(err)
+	}
+	return b.Chapter, b.Period
+}
+
+func Tweet(chapter, period int) {
 	db, err := sql.Open("sqlite3", dbFile)
 	if err != nil {
 		panic(err)
 	}
 	defer db.Close()
 
-	fmt.Println(GetPeriod(db, 1, 1, 1))
-	fmt.Println(GetPeriod(db, 2, 1, 1))
-	fmt.Println(GetPeriod(db, 3, 1, 1))
-	//38文字くらいで分割して表示
+	langs := []int{ita, eng, jap}
+	for _, lang := range langs {
+		s := GetPeriod(db, lang, chapter, period)
+		var prefix string
+		switch lang {
+		case ita: prefix = ":it:"
+		case eng: prefix = ":uk:"
+		case jap: prefix = ":jp:"
+		default: prefix = ""
+		}
+		emoji.Println(prefix + s)
+	}
+	//各国語で表示
+	//:国旗 99-99(99/11) - 改行込みで14文字
+	//38文字くらいで分割して表示?
 	//1章1節(99/99) -11文字+改行3+伊英日6 バッファは20
 	//伊：CAPITOLO I. GIÙ NELLA CONIGLIERA. -33文字
 	//英：CHAPTER I. Down the Rabbit-Hole
