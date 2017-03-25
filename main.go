@@ -10,6 +10,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
+	"gopkg.in/kyokomi/emoji.v1"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -17,7 +18,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"gopkg.in/kyokomi/emoji.v1"
 )
 
 type Record struct {
@@ -34,7 +34,7 @@ type Bookmark struct {
 }
 
 type Replacer struct {
-	Lang        int `json:"lang"`
+	Lang        int    `json:"lang"`
 	Target      string `json:"target"`
 	Replacement string `json:replacement`
 }
@@ -363,11 +363,15 @@ func main() {
 		GetFiles()
 	} else {
 		chapter, period := GetBookmark(*filename)
-		Tweet(chapter, period)
-		nc, np := GetNextBookmark(chapter, period)
-		s := fmt.Sprintf(`{"chapter":%v,"period":%v}`, nc, np)
-		ioutil.WriteFile(*filename, []byte(s), 0666)
+		sliceMap := GetSliceMap(chapter, period)
+		TweetMap(sliceMap)
+		SaveNextBookmark(chapter, period, filename)
 	}
+}
+func SaveNextBookmark(chapter int, period int, filename *string) {
+	nc, np := GetNextBookmark(chapter, period)
+	s := fmt.Sprintf(`{"chapter":%v,"period":%v}`, nc, np)
+	ioutil.WriteFile(*filename, []byte(s), 0666)
 }
 
 func QueryFirstInt(db *sql.DB, query string, args int) int {
@@ -418,14 +422,35 @@ func GetBookmark(filename string) (int, int) {
 	return b.Chapter, b.Period
 }
 
-func Tweet(chapter, period int) {
+func TweetMap(sliceMap map[int][]string) {
+	//各国語で表示
+	//イタリア語と英語を交互に表示
+	max := len(sliceMap[ita])
+	if max < len(sliceMap[eng]) {
+		max = len(sliceMap[eng])
+	}
+	for i := 0; i < max; i++ {
+		if i < len(sliceMap[ita]) {
+			emoji.Println(sliceMap[ita][i])
+		}
+		if i < len(sliceMap[eng]) {
+			emoji.Println(sliceMap[eng][i])
+		}
+	}
+	//日本語を最後に表示
+	for _, js := range sliceMap[jap] {
+		emoji.Println(js)
+	}
+}
+
+func GetSliceMap(chapter int, period int) map[int][]string {
 	db, err := sql.Open("sqlite3", dbFile)
 	if err != nil {
 		panic(err)
 	}
 	defer db.Close()
-
 	langs := []int{ita, eng, jap}
+	sliceMap := make(map[int][]string)
 	for _, lang := range langs {
 		s := GetPeriod(db, lang, chapter, period)
 		var format string
@@ -443,18 +468,15 @@ func Tweet(chapter, period int) {
 		default:
 			format = ""
 		}
+		var texts []string
 		for i, body := range ss {
 			text := fmt.Sprintf(format, chapter, period, i+1, len(ss), body)
-			emoji.Println(text)
+			texts = append(texts, text)
+
 		}
+		sliceMap[lang] = texts
 	}
-	//各国語で表示
-	//:国旗 99-99(99/11) - 改行込みで14文字
-	//38文字くらいで分割して表示?
-	//1章1節(99/99) -11文字+改行3+伊英日6 バッファは20
-	//伊：CAPITOLO I. GIÙ NELLA CONIGLIERA. -33文字
-	//英：CHAPTER I. Down the Rabbit-Hole
-	//日：1. うさぎの穴をまっさかさま       -15文字
+	return sliceMap
 }
 
 func Slice(text string, max int) []string {
