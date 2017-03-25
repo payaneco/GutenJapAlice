@@ -16,7 +16,7 @@
   },
   {
     "lang": 1,
-    "target": "sen vengono a fidanza,",
+    "target": "cominciar la danza.",
     "replacement": "$1\n"
   },
   {
@@ -56,12 +56,12 @@
   },
   {
     "lang": 2,
-    "target": "\nSee how eagerly",
-    "replacement": "See how eagerly"
+    "target": "treading on my tail.\r\n",
+    "replacement": "treading on my tail."
   },
   {
     "lang": 2,
-    "target": "\nin an undertone,",
+    "target": "in an undertone,\r\n",
     "replacement": "in an undertone,"
   },
   {

@@ -27,7 +27,7 @@ type Record struct {
 	text    string
 }
 
-//todo 質問
+//フィールド名は大文字でないと外部パッケージから参照できない
 type Bookmark struct {
 	Chapter int `json:"chapter"`
 	Period  int `json:"period"`
@@ -428,14 +428,25 @@ func Tweet(chapter, period int) {
 	langs := []int{ita, eng, jap}
 	for _, lang := range langs {
 		s := GetPeriod(db, lang, chapter, period)
-		var prefix string
+		var format string
+		var ss []string
 		switch lang {
-		case ita: prefix = ":it:"
-		case eng: prefix = ":uk:"
-		case jap: prefix = ":jp:"
-		default: prefix = ""
+		case ita:
+			format = ":it:%v-%v(%v/%v)\n%v"
+			ss = Slice(s, 120)
+		case eng:
+			format = ":uk:%v-%v(%v/%v)\n%v"
+			ss = Slice(s, 120)
+		case jap:
+			format = ":jp:%v-%v(%v/%v)\n%v"
+			ss = SliceFixed(s, 120)
+		default:
+			format = ""
 		}
-		emoji.Println(prefix + s)
+		for i, body := range ss {
+			text := fmt.Sprintf(format, chapter, period, i+1, len(ss), body)
+			emoji.Println(text)
+		}
 	}
 	//各国語で表示
 	//:国旗 99-99(99/11) - 改行込みで14文字
@@ -444,6 +455,38 @@ func Tweet(chapter, period int) {
 	//伊：CAPITOLO I. GIÙ NELLA CONIGLIERA. -33文字
 	//英：CHAPTER I. Down the Rabbit-Hole
 	//日：1. うさぎの穴をまっさかさま       -15文字
+}
+
+func Slice(text string, max int) []string {
+	var slice []string
+	var sb bytes.Buffer
+	for _, s := range strings.Fields(text) {
+		if sb.Len()+len(s) >= max {
+			slice = append(slice, sb.String())
+			sb.Reset()
+			sb.WriteString(s)
+		} else {
+			if sb.Len() != 0 {
+				sb.WriteString(" ")
+			}
+			sb.WriteString(s)
+		}
+	}
+	slice = append(slice, sb.String())
+	return slice
+}
+
+func SliceFixed(text string, splitlen int) []string {
+	var slice []string
+	runes := []rune(text)
+	for i := 0; i < len(runes); i += splitlen {
+		if i+splitlen < len(runes) {
+			slice = append(slice, string(runes[i:(i + splitlen)]))
+		} else {
+			slice = append(slice, string(runes[i:]))
+		}
+	}
+	return slice
 }
 
 func GetPeriod(db *sql.DB, lang, chapter, period int) string {
