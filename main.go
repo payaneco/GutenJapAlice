@@ -10,7 +10,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -20,29 +19,6 @@ import (
 	"strings"
 	"gopkg.in/kyokomi/emoji.v1"
 )
-
-//ファイル存在チェック
-func Exists(filename string) bool {
-	_, err := os.Stat(filename)
-	return err == nil
-}
-
-func Download(filename string, url string) bool {
-	out, err := os.Create(filename)
-	defer out.Close()
-	doc, err := http.Get(url)
-	defer doc.Body.Close()
-	if err != nil {
-		fmt.Print("url scarapping failed")
-		return false
-	}
-	_, err = io.Copy(out, doc.Body) //使わない変数はblank identifierにしまっちゃおうね
-	if err != nil {
-		fmt.Print("file output failed")
-		return false
-	}
-	return true
-}
 
 type Record struct {
 	chapter int
@@ -57,6 +33,12 @@ type Bookmark struct {
 	Period  int `json:"period"`
 }
 
+type Replacer struct {
+	Lang        int `json:"lang"`
+	Target      string `json:"target"`
+	Replacement string `json:replacement`
+}
+
 const dbFile = "./alice.db"
 const ita = 1
 const eng = 2
@@ -66,6 +48,79 @@ var langMap = map[int]string{
 	ita: "伊",
 	eng: "英",
 	jap: "日",
+}
+
+//ファイル存在チェック
+func Exists(filename string) bool {
+	_, err := os.Stat(filename)
+	return err == nil
+}
+
+func Download(lang int) bool {
+	fileMap := map[int]string{
+		ita: "alice_it.txt",
+		eng: "alice_en.txt",
+		jap: "alice_ja.txt",
+	}
+	urlMap := map[int]string{
+		ita: "http://www.gutenberg.org/cache/epub/28371/pg28371.txt",
+		eng: "http://www.gutenberg.org/files/11/11-0.txt",
+		jap: "http://www.genpaku.org/alice01/alice01j.txt",
+	}
+	filename := fileMap[lang]
+	//ファイルがあればスキップ
+	if Exists(filename) {
+		return true
+	}
+	url := urlMap[lang]
+	doc, err := http.Get(url)
+	defer doc.Body.Close()
+	if err != nil {
+		fmt.Print("url scarapping failed")
+		return false
+	}
+	arr, err := ioutil.ReadAll(doc.Body)
+	if err != nil {
+		fmt.Print("file read failed")
+		return false
+	}
+	text := string(arr)
+	if lang == jap {
+		//sjis -> utf-8
+		text, _, err = transform.String(japanese.ShiftJIS.NewDecoder(), text)
+		if err != nil {
+			fmt.Print("file encode failed")
+			return false
+		}
+	}
+	text = strings.Replace(Replace(lang, text), "\r", "", -1)
+	text = strings.Replace(text, "\n", "\r\n", -1)
+	ioutil.WriteFile(filename, []byte(text), 0666)
+	return true
+}
+
+func Replace(lang int, text string) string {
+	bytes, err := ioutil.ReadFile("replace.json")
+	if err != nil {
+		log.Fatal(err)
+		panic(err)
+	}
+	// JSONデコード
+	var replacers []Replacer
+	if err := json.Unmarshal(bytes, &replacers); err != nil {
+		log.Fatal(err)
+	}
+	s := text
+	for _, r := range replacers {
+		if lang != r.Lang {
+			continue
+		}
+		old := r.Target
+		new := strings.Replace(r.Replacement, `$1`, old, -1)
+		s = strings.Replace(s, old, new, -1)
+	}
+	return s
+
 }
 
 func CreateDB() {
@@ -245,7 +300,7 @@ func GetJapRecords() []Record {
 	if err != nil {
 		panic(err)
 	}
-	scanner := bufio.NewScanner(transform.NewReader(fp, japanese.ShiftJIS.NewDecoder()))
+	scanner := bufio.NewScanner(fp)
 	defer fp.Close()
 	list := []Record{}
 	//一行ずつ読み取って処理する
@@ -287,18 +342,10 @@ func GetJapRecords() []Record {
 }
 
 func GetFiles() {
-	//ファイルのダウンロード
-	files := map[string]string{
-		"alice_ja.txt": "http://www.genpaku.org/alice01/alice01j.txt",
-		"alice_en.txt": "http://www.gutenberg.org/files/11/11-0.txt",
-		"alice_it.txt": "http://www.gutenberg.org/cache/epub/28371/pg28371.txt",
-	}
-	for filename, url := range files {
-		//ファイルがあればスキップ
-		if Exists(filename) {
-			continue
-		}
-		if !Download(filename, url) {
+	langs := []int{ita, eng, jap}
+	for _, lang := range langs {
+		//ファイルのダウンロード
+		if !Download(lang) {
 			return
 		}
 	}

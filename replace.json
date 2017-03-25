@@ -1,0 +1,92 @@
+[
+  {
+    "lang": 1,
+    "target": "(Coro al quale",
+    "replacement": "\nCORO.\n\n$1"
+  },
+  {
+    "lang": 1,
+    "target": "Questa risposta",
+    "replacement": "\n\n[Nessuna traduzione]\n\n[Nessuna traduzione]\n\n$1"
+  },
+  {
+    "lang": 1,
+    "target": "grazia a tutti.",
+    "replacement": "$1\n\n"
+  },
+  {
+    "lang": 1,
+    "target": "sen vengono a fidanza,",
+    "replacement": "$1\n"
+  },
+  {
+    "lang": 1,
+    "target": "strano!\"",
+    "replacement": "$1\n"
+  },
+  {
+    "lang": 1,
+    "target": "in pace!",
+    "replacement": "$1\n"
+  },
+  {
+    "lang": 1,
+    "target": "Quì un altro",
+    "replacement": "\n\n[Nessuna traduzione]\n\n[Nessuna traduzione]\n\n$1"
+  },
+  {
+    "lang": 2,
+    "target": "find her way out.",
+    "replacement": "$1\n\n"
+  },
+  {
+    "lang": 2,
+    "target": "YOUR temper!’",
+    "replacement": "$1\n\n"
+  },
+  {
+    "lang": 2,
+    "target": "began. Alice thought",
+    "replacement": "began.\n\nAlice thought"
+  },
+  {
+    "lang": 2,
+    "target": "all pardoned.’",
+    "replacement": "$1\n\n"
+  },
+  {
+    "lang": 2,
+    "target": "\nSee how eagerly",
+    "replacement": "See how eagerly"
+  },
+  {
+    "lang": 2,
+    "target": "\nin an undertone,",
+    "replacement": "in an undertone,"
+  },
+  {
+    "lang": 3,
+    "target": "「おかげでいま、",
+    "replacement": "\n\n$1"
+  },
+  {
+    "lang": 3,
+    "target": "すると若いカニが",
+    "replacement": "\n\n$1"
+  },
+  {
+    "lang": 3,
+    "target": "試合開始です。",
+    "replacement": "$1\n\n"
+  },
+  {
+    "lang": 3,
+    "target": "\nハートのジャック、",
+    "replacement": "ハートのジャック、"
+  },
+  {
+    "lang": 3,
+    "target": "\n（訳者の",
+    "replacement": "（訳者の"
+  }
+]

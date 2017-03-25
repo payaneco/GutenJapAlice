@@ -2,6 +2,8 @@
 *.o
 *.a
 *.so
+*.txt
+*.db
 
 # Folders
 _obj
