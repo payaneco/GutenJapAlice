@@ -18,8 +18,11 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
+//twitter画像
+//https://matome.naver.jp/odai/2141188280244334001/2144187436549047103
 type Record struct {
 	chapter int
 	period  int
@@ -431,16 +434,22 @@ func TweetMap(sliceMap map[int][]string) {
 	}
 	for i := 0; i < max; i++ {
 		if i < len(sliceMap[ita]) {
-			emoji.Println(sliceMap[ita][i])
+			TweetAndRest(sliceMap[ita][i])
 		}
 		if i < len(sliceMap[eng]) {
-			emoji.Println(sliceMap[eng][i])
+			TweetAndRest(sliceMap[eng][i])
 		}
 	}
 	//日本語を最後に表示
 	for _, js := range sliceMap[jap] {
-		emoji.Println(js)
+		TweetAndRest(js)
 	}
+}
+
+func TweetAndRest(text string) {
+	s := emoji.Sprint(text)
+	Tweet(s)
+	time.Sleep(70 * time.Second)
 }
 
 func GetSliceMap(chapter int, period int) map[int][]string {
