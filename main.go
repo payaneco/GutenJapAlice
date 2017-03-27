@@ -449,7 +449,7 @@ func TweetMap(sliceMap map[int][]string) {
 func TweetAndRest(text string) {
 	s := emoji.Sprint(text)
 	Tweet(s)
-	time.Sleep(70 * time.Second)
+	time.Sleep(10 * time.Second)
 }
 
 func GetSliceMap(chapter int, period int) map[int][]string {
