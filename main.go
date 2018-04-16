@@ -467,13 +467,13 @@ func GetSliceMap(chapter int, period int) map[int][]string {
 		switch lang {
 		case ita:
 			format = ":it:%v-%v(%v/%v)\n%v"
-			ss = Slice(s, 120)
+			ss = Slice(s, 260)
 		case eng:
 			format = ":uk:%v-%v(%v/%v)\n%v"
-			ss = Slice(s, 120)
+			ss = Slice(s, 260)
 		case jap:
 			format = ":jp:%v-%v(%v/%v)\n%v"
-			ss = SliceFixed(s, 120)
+			ss = SliceFixed(s, 125)
 		default:
 			format = ""
 		}
